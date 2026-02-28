@@ -10,13 +10,10 @@ def start_sign():
         print("❌ 錯誤：找不到 APK_COOKIE 設定")
         return
 
-    # 完整模擬瀏覽器標頭
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'Cookie': COOKIE,
         'Referer': 'https://apk.tw',
-        'Origin': 'https://apk.tw',
-        'Accept': 'application/xml, text/xml, */*; q=0.01',
         'X-Requested-With': 'XMLHttpRequest'
     }
 
@@ -28,47 +25,46 @@ def start_sign():
         formhash_match = re.search(r'name="formhash" value="([^"]+)"', res.text)
         
         if not formhash_match:
-            print("⚠️ 無法取得 formhash。可能是 Cookie 不完整（需包含 saltkey 與 auth）。")
+            print("⚠️ 無法取得 formhash。請檢查 Cookie 內容，必須包含 _saltkey 與 _auth。")
             return
         
         formhash = formhash_match.group(1)
         print(f"✅ 取得最新 formhash: {formhash}")
 
-        # 2. 準備簽到參數與資料
-        sign_url = "https://apk.tw&operation=qiandao&infloat=1&inajax=1"
-        data = {
+        # 2. 修正網址拼接：將參數與 URL 完全分離
+        # 這樣 requests 會自動幫你組合出正確的 https://apk.tw...
+        target_url = "https://apk.tw"
+        query_params = {
+            'id': 'dsu_paulsign:sign',
+            'operation': 'qiandao',
+            'infloat': '1',
+            'inajax': '1'
+        }
+        post_data = {
             'formhash': formhash,
             'qmd': 'kx',
-            'todaysay': 'GitHub Actions 自動簽到成功！',
-            'fastpostrefresh': '1'
+            'todaysay': 'GitHub Actions 自動簽到成功！'
         }
         
-        # 3. 發送請求
-        sign_res = session.post(sign_url, headers=headers, data=data)
+        # 關鍵：params 用於網址參數 (?id=...)，data 用於 POST 表單內容
+        sign_res = session.post(target_url, headers=headers, params=query_params, data=post_data)
         
-        # 4. 精確判斷回傳內容
+        # 3. 判斷結果
         response_text = sign_res.text
-        
-        # 檢查是否成功或重複
         if "簽到成功" in response_text:
             print("🎉 【成功】恭喜！今日簽到已完成。")
         elif any(msg in response_text for msg in ["今日已簽到", "您隔天再來", "您今天已經簽到過"]):
-            print("🟡 【重複】你今天已經簽到過了。")
+            print("🟡 【重複】你今天已經簽到過了，無需操作。")
         elif "需要先登入" in response_text:
-            print("❌ 【失敗】Cookie 驗證失敗，請檢查 Secrets。")
+            print("❌ 【失敗】Cookie 已失效，請重新抓取。")
         else:
-            # 如果是 XML 格式，嘗試提取 CDATA
-            cdata = re.search(r'CDATA\[(.*?)\]', response_text)
-            if cdata:
-                print(f"❓ 【回傳訊息】: {cdata.group(1)}")
-            else:
-                # 顯示前 150 字方便你複製給我看
-                print(f"❓ 【回傳 HTML 預覽】: {response_text[:150].strip()}")
+            # 抓取 XML 中的訊息內容 (CDATA)
+            msg = re.search(r'CDATA\[(.*?)\]', response_text)
+            result_text = msg.group(1).strip() if msg else "未知回傳內容"
+            print(f"❓ 【訊息】: {result_text}")
 
     except Exception as e:
         print(f"🚀 執行過程發生錯誤: {e}")
 
 if __name__ == "__main__":
-    start_sign()
-
     start_sign()
